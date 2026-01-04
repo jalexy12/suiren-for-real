@@ -1,0 +1,23 @@
+{
+  "name": "suiren",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun --filter 'apps/*' dev",
+    "dev:web": "bun --filter '@suiren/web' dev",
+    "dev:agent": "bun --filter '@suiren/agent' dev",
+    "dev:convex": "npx convex dev",
+    "restart:agent": "pkill -f 'bun.*apps/agent' 2>/dev/null; bun --filter '@suiren/agent' dev",
+    "build": "bun --filter 'apps/*' build",
+    "lint": "bun --filter '*' lint",
+    "typecheck": "bun --filter '*' typecheck"
+  },
+  "dependencies": {
+    "convex": "^1.31.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}

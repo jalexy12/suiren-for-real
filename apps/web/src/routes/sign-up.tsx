@@ -1,0 +1,18 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { SignUp } from '@clerk/tanstack-react-start'
+
+export const Route = createFileRoute('/sign-up')({
+  component: SignUpPage,
+})
+
+function SignUpPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-50">
+      <SignUp
+        routing="hash"
+        signInUrl="/sign-in"
+        forceRedirectUrl="/chat"
+      />
+    </div>
+  )
+}

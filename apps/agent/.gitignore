@@ -1,0 +1,8 @@
+# Agent-specific ignores (root .gitignore handles common patterns)
+
+# Build output
+dist/
+
+# Local env (root handles .env patterns, but explicit here too)
+.env
+.env.local

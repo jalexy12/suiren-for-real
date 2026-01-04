@@ -1,0 +1,4 @@
+# Shared package ignores (root .gitignore handles common patterns)
+
+# Build output
+dist/

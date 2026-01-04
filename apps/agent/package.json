@@ -1,0 +1,26 @@
+{
+  "name": "@suiren/agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.2",
+    "@clerk/backend": "^1.26.0",
+    "@suiren/shared": "workspace:*",
+    "ai": "^6.0.6",
+    "chrono-node": "^2.7.7",
+    "convex": "^1.31.2",
+    "hono": "^4.6.20",
+    "just-bash": "^1.4.0",
+    "yaml": "^2.8.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}
