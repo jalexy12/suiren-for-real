@@ -1,4 +1,4 @@
-FROM oven/bun:1-alpine AS base
+FROM oven/bun:1-debian AS base
 WORKDIR /app
 
 # Install dependencies
