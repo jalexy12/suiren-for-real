@@ -6,7 +6,7 @@ FROM base AS deps
 COPY package.json bun.lock* ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/agent/package.json ./apps/agent/
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Build
 FROM base AS builder
