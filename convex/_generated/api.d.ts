@@ -8,13 +8,23 @@
  * @module
  */
 
+import type * as compaction from "../compaction.js";
+import type * as conversations from "../conversations.js";
+import type * as scheduledMessages from "../scheduledMessages.js";
+import type * as userSettings from "../userSettings.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  compaction: typeof compaction;
+  conversations: typeof conversations;
+  scheduledMessages: typeof scheduledMessages;
+  userSettings: typeof userSettings;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.
