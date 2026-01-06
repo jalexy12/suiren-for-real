@@ -6,6 +6,7 @@
 - Work is NOT done until verified. Run `bun run typecheck`. Test in browser. No exceptions.
 - "It should work" is not verification. Prove it works or admit you couldn't verify.
 - If typecheck fails, fix it before saying you're done.
+- **Exception**: `client.tsx` and `ssr.tsx` have upstream TanStack Start type errors—ignore those.
 
 ### Type Safety
 - No `any`. No `unknown` escape hatches. No `as` casts to silence errors.
@@ -29,6 +30,15 @@
 - **No console.log in production code.** Use a proper logger or remove it.
 - **No fire-and-forget promises.** Handle errors or explicitly acknowledge the risk.
 
+### Simplicity is King
+- Small APIs. Minimal surface area. The best code is code that doesn't exist.
+- Every function, parameter, and field is a liability. Justify its existence.
+- If you can solve it with less, solve it with less.
+
+### No Unrequested Changes
+- **Do NOT add ANYTHING not explicitly requested.** If it wasn't asked for, don't add it.
+- Before adding ANY new schema field, API parameter, or data structure: **ASK FIRST**.
+
 ### Configuration
 - **No hardcoded values that vary by environment.** Model names, URLs, user IDs → config/constants.
 - If you're typing the same string literal in multiple files, you've already failed. Make it a constant.
@@ -38,10 +48,7 @@
 - Before adding ANY library: verify recent commits, wide usage, proper types.
 - Check `package.json` first—is something already there that does this?
 - New dep = last resort, not first instinct.
-
-### State Management
-- URL params for anything that should survive refresh. Period.
-- If you put a navigation ID in useState, you've already failed.
+- **State that survives refresh → URL params.** Don't put navigation IDs in useState.
 
 ---
 
@@ -56,13 +63,11 @@
 | Backend | Convex |
 | Auth | Clerk |
 
-### AI SDK v6 - Agents
-We use the agent architecture with tool loops:
-- `agent()` function from `ai` package with `maxSteps` for multi-turn tool execution
-- Agent manages its own loop—you don't manually loop over tool calls
-- Tools defined with `tool()` from `ai` with Zod schemas
+### AI SDK - Agents
+- `ToolLoopAgent` from `ai` with callbacks: `prepareStep`, `onStepFinish`, `onFinish`
+- Tools defined with `tool()` from `ai` + Zod schemas
 - See `apps/agent/src/services/agent.ts` for the pattern
-- **Docs change constantly**—web search "vercel ai sdk agents" before assuming anything
+- **Docs change constantly**—web search before assuming anything
 
 ---
 
@@ -101,16 +106,6 @@ bun run restart:agent
 - `apps/web/src/routes/chat.$conversationId.tsx` - Chat content
 - `convex/schema.ts` - Database schema
 - `packages/shared/` - Shared types between apps
-
-## Known Tech Debt
-- **Auth not wired up**: DEV_USER_ID constant used instead of Clerk auth. See:
-  - `apps/agent/src/middleware/auth.ts` (middleware exists, not applied)
-  - `apps/agent/src/config.ts` (DEV_USER_ID)
-  - `apps/web/src/config.ts` (DEV_USER_ID)
-  - Need to: apply auth middleware, send tokens from web, use real userId
-- **TanStack Start type errors**: `client.tsx` and `ssr.tsx` have type errors due to TanStack Start's typing issues
-  - App works at runtime, types are broken upstream
-  - Track: https://github.com/TanStack/router/issues
 
 ## Gotchas
 - TanStack Start, Convex, AI SDK APIs change constantly. Verify docs are current.

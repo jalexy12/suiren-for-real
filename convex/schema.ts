@@ -33,9 +33,16 @@ export default defineSchema({
   conversations: defineTable({
     userId: v.string(),
     title: v.optional(v.string()),
+    // Thread hierarchy
+    parentConversationId: v.optional(v.id("conversations")),
+    parentMessageId: v.optional(v.id("messages")),
+    // Thread workspace path (e.g., "/home/sui/threads/{id}")
+    threadPath: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_parent", ["parentConversationId"]),
 
   messages: defineTable({
     conversationId: v.id("conversations"),
@@ -45,6 +52,10 @@ export default defineSchema({
     // Compaction fields
     isSummary: v.optional(v.boolean()),
     compactionId: v.optional(v.string()),
+    // Subthread: forked context messages (in context but hidden from UI)
+    isForkedContext: v.optional(v.boolean()),
+    // Detached forked context (ignored when processing)
+    isDetached: v.optional(v.boolean()),
   }).index("by_conversation", ["conversationId"]),
 
   // Archive of original messages before compaction
@@ -63,14 +74,6 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_conversation", ["conversationId"]),
 
-  notes: defineTable({
-    userId: v.string(),
-    title: v.string(),
-    content: v.string(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
-
   scheduledMessages: defineTable({
     userId: v.string(),
     message: v.string(),
@@ -79,5 +82,14 @@ export default defineSchema({
     sent: v.boolean(),
     conversationId: v.optional(v.id("conversations")),
     createdAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  userSettings: defineTable({
+    userId: v.string(),
+    // Linear integration
+    linearApiKey: v.optional(v.string()),
+    linearDefaultTeamId: v.optional(v.string()),
+    linearAgentProjectId: v.optional(v.string()),
+    updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 });

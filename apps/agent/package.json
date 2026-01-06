@@ -10,7 +10,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.2",
     "@clerk/backend": "^1.26.0",
+    "@linear/sdk": "^68.1.0",
     "@suiren/shared": "workspace:*",
+    "agentfs-sdk": "^0.4.1",
     "ai": "^6.0.6",
     "chrono-node": "^2.7.7",
     "convex": "^1.31.2",

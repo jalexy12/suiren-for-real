@@ -13,6 +13,7 @@ chat.post('/', async (c) => {
   const body = await c.req.json()
   // Messages come from client - trust the shape matches UIMessage at runtime
   const messages = (body.messages || []) as UIMessage[]
+  const conversationId = body.conversationId as string | undefined
 
   // Ensure all messages have IDs
   const uiMessages = messages.map((msg, i) => ({
@@ -20,14 +21,15 @@ chat.post('/', async (c) => {
     id: msg.id || `msg-${i}-${Date.now()}`,
   }))
 
-  // Get authenticated userId from middleware
+  // Get authenticated userId and tokens from middleware
   const userId = c.get('userId')
+  const convexToken = c.get('convexToken')
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       try {
         // Create agent with writer for subagent progress streaming
-        const agent = createAgent(userId, writer)
+        const agent = await createAgent(userId, writer, convexToken, conversationId)
 
         // Convert UI messages to model messages
         const modelMessages = await convertToModelMessages(uiMessages)

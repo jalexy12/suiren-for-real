@@ -14,7 +14,7 @@ title.post('/', async (c) => {
 
   const result = await generateText({
     model: anthropic(MODELS.fast),
-    system: 'Generate a brief, descriptive title (3-6 words) for a conversation. Return ONLY the title, no quotes or extra punctuation.',
+    system: 'Generate a brief, descriptive title (3-6 words) for a the given prompt message. Return ONLY the title, no quotes or extra punctuation.',
     prompt: message,
   })
 

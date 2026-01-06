@@ -1,6 +1,7 @@
 import { ToolLoopAgent, tool } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 import { Bash } from 'just-bash'
+import { agentfs } from 'agentfs-sdk/just-bash'
 import { z } from 'zod'
 import { join } from 'node:path'
 import * as chrono from 'chrono-node'
@@ -16,6 +17,7 @@ import { AGENTFS_PATHS } from '@suiren/shared'
 import { convex, api } from '../lib/convex'
 import type { UIMessageStreamWriter } from 'ai'
 import { MODELS, AGENT_CONFIG, PATHS } from '../config'
+import { createLinearTools, LINEAR_PROMPT } from '../integrations/linear'
 
 const CONTEXT_LIMIT = 200000 // Claude Sonnet context window
 
@@ -31,8 +33,12 @@ const webFetchTool = anthropic.tools.webFetch_20250910()
 
 const codeExecutionTool = anthropic.tools.codeExecution_20250825()
 
-// Store per-user bash environments
+// Store per-user bash environments (with persistent AgentFS backing)
 const userEnvs = new Map<string, Bash>()
+// Store per-user AgentFS instances for direct file operations
+const userFilesystems = new Map<string, Awaited<ReturnType<typeof agentfs>>>()
+// Track which users have been bootstrapped
+const bootstrappedUsers = new Set<string>()
 
 // Global skill registry (loaded once at startup)
 let skillRegistry: SkillRegistry | null = null
@@ -43,28 +49,56 @@ export async function initializeSkills(): Promise<void> {
   skillRegistry = await loadSkills(skillsDir)
 }
 
-function getOrCreateEnv(userId: string): Bash {
+async function getOrCreateEnv(userId: string): Promise<{ bash: Bash; fs: Awaited<ReturnType<typeof agentfs>> }> {
   if (!userEnvs.has(userId)) {
-    // Bootstrap skills into virtual filesystem
-    const skillFiles = skillRegistry?.files ?? {}
+    // Create AgentFS-backed filesystem for this user
+    const fs = await agentfs({ id: userId })
+    const bash = new Bash({ fs, cwd: PATHS.userHome })
 
-    userEnvs.set(userId, new Bash({
-      cwd: PATHS.userHome,
-      files: {
-        [`${PATHS.userHome}/.suirc`]: '# Sui home directory\n',
-        ...skillFiles,
-      },
-    }))
+    // Bootstrap skills and home directory on first access
+    if (!bootstrappedUsers.has(userId)) {
+      // Create home directory marker
+      try {
+        await fs.writeFile(`${PATHS.userHome}/.suirc`, '# Sui home directory\n')
+      } catch {
+        // File may already exist
+      }
+
+      // Bootstrap skills into AgentFS
+      const skillFiles = skillRegistry?.files ?? {}
+      for (const [path, content] of Object.entries(skillFiles)) {
+        try {
+          await fs.writeFile(path, content)
+        } catch {
+          // Skill file may already exist
+        }
+      }
+      bootstrappedUsers.add(userId)
+    }
+
+    userEnvs.set(userId, bash)
+    userFilesystems.set(userId, fs)
   }
-  return userEnvs.get(userId)!
+  return { bash: userEnvs.get(userId)!, fs: userFilesystems.get(userId)! }
 }
 
-export function getEnv(userId: string): Bash {
-  return getOrCreateEnv(userId)
+export async function getEnv(userId: string): Promise<Bash> {
+  const { bash } = await getOrCreateEnv(userId)
+  return bash
 }
 
-export function createAgent(userId: string, writer?: UIMessageStreamWriter) {
-  const env = getOrCreateEnv(userId)
+export async function createAgent(userId: string, writer?: UIMessageStreamWriter, convexToken?: string, conversationId?: string) {
+  const { bash: env } = await getOrCreateEnv(userId)
+
+  // Set Convex auth if token provided (requires JWT template "convex" in Clerk)
+  if (convexToken) {
+    convex.setAuth(convexToken)
+  } else {
+    convex.clearAuth()
+  }
+
+  // Check user settings for integrations
+  const userSettings = await convex.query(api.userSettings.get, { userId })
 
   const bashTool = tool({
     description: 'Execute bash commands in a sandboxed environment. Use this to create files, run commands, and manage the filesystem.',
@@ -239,48 +273,168 @@ Time formats: "in 2 hours", "at 3pm", "tomorrow at 9am", "next Monday"`,
     },
   })
 
-  return new ToolLoopAgent({
-    model: anthropic(MODELS.agent),
-    instructions: `You are Sui, an intelligent assistant that helps users manage their life.
+  // Create subthread tool - for interactive exploration
+  const createSubthreadTool = tool({
+    description: `Create a subthread for focused exploration or research. The subthread gets its own conversation where the user can explore a topic interactively.
+
+Use this when:
+- The user wants to explore a tangent without losing the main thread
+- A topic deserves deeper investigation that might derail the conversation
+- You want to suggest the user explore something in more depth
+
+The subthread inherits the current conversation context. The user will navigate to it to continue exploring.`,
+    inputSchema: z.object({
+      title: z.string().describe('Short descriptive title for the thread (e.g., "Market Research", "Pricing Analysis")'),
+    }),
+    execute: async ({ title }: { title: string }) => {
+      if (!conversationId) {
+        return { success: false, error: 'No conversation context available' }
+      }
+
+      try {
+        const result = await convex.mutation(api.conversations.createSubthread, {
+          parentConversationId: conversationId as any, // Convex ID type
+          title,
+        })
+
+        // Create the notes file in the virtual filesystem
+        const notesPath = `${result.threadPath}/notes.md`
+        const initialContent = `---
+summary:
+---
+
+# ${title}
+
+Notes will be added here as you explore.
+`
+        // Create directory and write file
+        await env.exec(`mkdir -p ${result.threadPath}`)
+        await env.exec(`cat > ${notesPath} << 'SUIREN_EOF'
+${initialContent}
+SUIREN_EOF`)
+
+        return {
+          success: true,
+          subthreadId: result.subthreadId,
+          threadPath: result.threadPath,
+          notesFile: notesPath,
+          message: `Created subthread "${title}". The user can navigate to it to explore this topic.`,
+        }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    },
+  })
+
+  // Build base tools
+  const tools: Record<string, any> = {
+    // Tool search - discovers deferred tools on demand
+    tool_search: toolSearchTool,
+    // Always-loaded tools (essential, low token cost)
+    bash: bashTool,
+    // Deferred tools - discovered via tool_search when needed
+    start_task: {
+      ...startTaskTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    load_skill: {
+      ...loadSkillTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    send_later: {
+      ...sendLaterTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    create_subthread: {
+      ...createSubthreadTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    // Anthropic built-in tools (deferred)
+    web_search: {
+      ...webSearchTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    web_fetch: {
+      ...webFetchTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+    code_execution: {
+      ...codeExecutionTool,
+      providerOptions: { anthropic: { deferLoading: true } },
+    },
+  }
+
+  // Build instructions
+  let instructions = `You are Sui, an intelligent assistant that helps users manage their life.
 
 You have a bash environment (your home is ${PATHS.userHome}) for files, notes, and commands.
 
 Use tool_search to discover additional capabilities when needed - web search, code execution, subagents, scheduling, and more.
 
 Be concise. Don't over-explain unless asked.
-${skillsPrompt}`,
-    tools: {
-      // Tool search - discovers deferred tools on demand
-      tool_search: toolSearchTool,
-      // Always-loaded tools (essential, low token cost)
-      bash: bashTool,
-      // Deferred tools - discovered via tool_search when needed
-      start_task: {
-        ...startTaskTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-      load_skill: {
-        ...loadSkillTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-      send_later: {
-        ...sendLaterTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-      // Anthropic built-in tools (deferred)
-      web_search: {
-        ...webSearchTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-      web_fetch: {
-        ...webFetchTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-      code_execution: {
-        ...codeExecutionTool,
-        providerOptions: { anthropic: { deferLoading: true } },
-      },
-    },
+${skillsPrompt}`
+
+  // Conditionally load Linear integration
+  if (userSettings?.linearApiKey) {
+    const linearTools = createLinearTools({
+      userId,
+      apiKey: userSettings.linearApiKey,
+      defaultTeamId: userSettings.linearDefaultTeamId,
+      agentProjectId: userSettings.linearAgentProjectId,
+      convex,
+      api,
+      writer,
+    })
+
+    // Add Linear tools with same structure as other deferred tools
+    tools.linear_list_issues = {
+      ...linearTools.linear_list_issues,
+      providerOptions: { anthropic: { deferLoading: true } },
+    }
+    tools.linear_create_issue = {
+      ...linearTools.linear_create_issue,
+      providerOptions: { anthropic: { deferLoading: true } },
+    }
+    tools.linear_update_issue = {
+      ...linearTools.linear_update_issue,
+      providerOptions: { anthropic: { deferLoading: true } },
+    }
+    tools.linear_get_context = {
+      ...linearTools.linear_get_context,
+      providerOptions: { anthropic: { deferLoading: true } },
+    }
+    tools.linear_agent_task = {
+      ...linearTools.linear_agent_task,
+      providerOptions: { anthropic: { deferLoading: true } },
+    }
+
+    instructions += '\n' + LINEAR_PROMPT
+  }
+
+  // Add subthread context if this is a subthread
+  if (conversationId) {
+    try {
+      const threadContext = await convex.query(api.conversations.getThreadContext, {
+        conversationId: conversationId as any,
+      })
+
+      if (threadContext?.isSubthread && threadContext.threadPath) {
+        instructions += `
+
+## Subthread Context
+You are in a subthread. The messages in context include the parent conversation for reference.
+Write your findings and notes to: ${threadContext.threadPath}/notes.md
+Use YAML front matter with a "summary" field for the key takeaway. Update as you work.`
+      }
+    } catch {
+      // Not a valid conversation ID or not a subthread - continue without subthread context
+    }
+  }
+
+  return new ToolLoopAgent({
+    model: anthropic(MODELS.agent),
+    instructions,
+    tools,
 
     // BEFORE each step: check and compact if needed
     prepareStep: async ({ messages, steps }) => {

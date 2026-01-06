@@ -4,6 +4,8 @@ import { verifyToken } from '@clerk/backend'
 declare module 'hono' {
   interface ContextVariableMap {
     userId: string
+    clerkToken: string
+    convexToken: string | undefined
   }
 }
 
@@ -15,6 +17,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   const token = authHeader.slice(7)
+  const convexToken = c.req.header('X-Convex-Token')
 
   try {
     const payload = await verifyToken(token, {
@@ -26,6 +29,8 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     }
 
     c.set('userId', payload.sub)
+    c.set('clerkToken', token)
+    c.set('convexToken', convexToken)
     await next()
   } catch (error) {
     console.error('Auth error:', error)

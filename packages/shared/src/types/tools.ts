@@ -17,4 +17,5 @@ export const AGENTFS_PATHS = {
   skills: `${AGENTFS_ROOT}/skills`,
   memory: `${AGENTFS_ROOT}/memory`,
   artifacts: `${AGENTFS_ROOT}/artifacts`,
+  threads: `${AGENTFS_ROOT}/threads`,
 } as const

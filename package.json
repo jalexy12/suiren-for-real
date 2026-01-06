@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "bun --filter 'apps/*' dev",
+    "dev": "bun --filter '@suiren/*' dev",
     "dev:web": "bun --filter '@suiren/web' dev",
     "dev:agent": "bun --filter '@suiren/agent' dev",
     "dev:convex": "npx convex dev",

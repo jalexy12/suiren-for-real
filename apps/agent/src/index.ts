@@ -4,6 +4,7 @@ import { logger } from 'hono/logger'
 import chat from './routes/chat'
 import health from './routes/health'
 import title from './routes/title'
+import files from './routes/files'
 import { authMiddleware } from './middleware/auth'
 import { initializeSkills } from './services/agent'
 
@@ -32,8 +33,11 @@ app.get('/', (c) => c.json({ name: 'suiren-agent', status: 'ok' }))
 // Protected routes (auth required)
 app.use('/chat/*', authMiddleware)
 app.use('/title/*', authMiddleware)
+app.use('/files', authMiddleware)
+app.use('/files/*', authMiddleware)
 app.route('/chat', chat)
 app.route('/title', title)
+app.route('/files', files)
 
 const port = parseInt(process.env.PORT || '3001')
 console.log(`Agent server running on port ${port}`)
