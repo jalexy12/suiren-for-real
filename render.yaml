@@ -22,7 +22,7 @@ services:
   - type: web
     name: suiren-web
     runtime: node
-    buildCommand: cd apps/web && bun install && bun run build
+    buildCommand: bun install && npx convex codegen && cd apps/web && bun run build
     startCommand: cd apps/web && node .output/server/index.mjs
     envVars:
       - key: VITE_CONVEX_URL
