@@ -23,7 +23,7 @@ services:
     name: suiren-web
     runtime: node
     buildCommand: bun install && cd apps/web && npx vite build
-    startCommand: cd apps/web && node dist/server/server.js
+    startCommand: cd apps/web && node server.mjs
     envVars:
       - key: VITE_CONVEX_URL
         sync: false
