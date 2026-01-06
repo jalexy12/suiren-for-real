@@ -18,6 +18,7 @@ FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/apps/agent ./apps/agent
+COPY --from=builder /app/convex ./convex
 COPY --from=builder /app/node_modules ./node_modules
 
 WORKDIR /app/apps/agent
