@@ -11,8 +11,6 @@ RUN bun install
 # Build
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/apps/agent/node_modules ./apps/agent/node_modules
 COPY . .
 
 # Production
