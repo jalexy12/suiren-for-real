@@ -6,6 +6,10 @@ services:
     dockerfilePath: ./apps/agent/Dockerfile
     dockerContext: .
     healthCheckPath: /health
+    disk:
+      name: agentfs-data
+      mountPath: /app/apps/agent/.agentfs
+      sizeGB: 1
     envVars:
       - key: CLERK_SECRET_KEY
         sync: false
