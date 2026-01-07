@@ -29,6 +29,8 @@ services:
         sync: false
       - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
       - key: VITE_AGENT_URL
         sync: false
       - key: CONVEX_DEPLOY_KEY
